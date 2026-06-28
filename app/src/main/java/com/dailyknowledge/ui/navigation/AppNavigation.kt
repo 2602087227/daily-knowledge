@@ -25,8 +25,8 @@ sealed class BottomNavItem(
     val label: String,
     val icon: ImageVector
 ) {
-    data object Today : BottomNavItem("today", "今日知识", Icons.Default.Today)
-    data object Library : BottomNavItem("library", "知识库", Icons.Default.LibraryBooks)
+    data object Today : BottomNavItem("today", "今日知识", Icons.Default.Lightbulb)
+    data object Library : BottomNavItem("library", "知识库", Icons.Default.MenuBook)
     data object Favorites : BottomNavItem("favorites", "收藏", Icons.Default.Star)
     data object Search : BottomNavItem("search", "搜索", Icons.Default.Search)
 }
