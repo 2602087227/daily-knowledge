@@ -16,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.dailyknowledge.data.model.KnowledgeFile
 import com.dailyknowledge.data.model.KnowledgeItem
 import com.dailyknowledge.ui.viewmodel.LibraryViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -47,26 +51,32 @@ fun KnowledgeLibraryScreen(
 
     // 防止双击重复启动文件选择器导致崩溃
     var pickerLaunched by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     // 文件选择器
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         pickerLaunched = false  // 选择器返回/取消后重置标志
-        uri?.let {
-            // 从 ContentResolver 获取文件名
-            val cursor = viewModel.getApplication<android.app.Application>()
-                .contentResolver.query(uri, null, null, null, null)
-            var fileName = "unknown_file"
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (nameIndex >= 0) {
-                        fileName = it.getString(nameIndex)
+        uri?.let { selectedUri ->
+            coroutineScope.launch {
+                // 在后台线程读取文件名，避免主线程 I/O
+                val fileName = withContext(Dispatchers.IO) {
+                    val cursor = viewModel.getApplication<android.app.Application>()
+                        .contentResolver.query(selectedUri, null, null, null, null)
+                    var name = "unknown_file"
+                    cursor?.use {
+                        if (it.moveToFirst()) {
+                            val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (nameIndex >= 0) {
+                                name = it.getString(nameIndex)
+                            }
+                        }
                     }
+                    name
                 }
+                viewModel.importFile(selectedUri, fileName)
             }
-            viewModel.importFile(uri, fileName)
         }
     }
 

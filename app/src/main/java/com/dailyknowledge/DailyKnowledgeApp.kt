@@ -14,7 +14,7 @@ import com.dailyknowledge.util.TtsManager
  */
 class DailyKnowledgeApp : Application(), Configuration.Provider {
 
-    lateinit var ttsManager: TtsManager
+    var ttsManager: TtsManager? = null
         private set
 
     override fun onCreate() {
@@ -62,7 +62,7 @@ class DailyKnowledgeApp : Application(), Configuration.Provider {
 
     override fun onTerminate() {
         try {
-            ttsManager.shutdown()
+            ttsManager?.shutdown()
         } catch (_: Exception) {}
         super.onTerminate()
     }

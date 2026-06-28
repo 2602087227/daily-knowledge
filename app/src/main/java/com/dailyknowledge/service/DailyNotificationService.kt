@@ -32,19 +32,23 @@ class DailyNotificationService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var isTtsReady = false
 
-    /** 取得 Application 级 TTS 单例（懒获取，避免 service 提前创建时失败） */
+    /** 取得 Application 级 TTS 单例（可能为 null） */
     private val ttsManager: TtsManager?
-        get() = try {
-            DailyKnowledgeApp.getInstance().ttsManager
-        } catch (_: Exception) {
-            null
-        }
+        get() = DailyKnowledgeApp.getInstance().ttsManager
 
     companion object {
         private const val TAG = "DailyNotificationSvc"
         const val CHANNEL_ID = "daily_knowledge_channel"
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP_SERVICE = "com.dailyknowledge.action.STOP_SERVICE"
+        const val ACTION_REFRESH_CONTENT = "com.dailyknowledge.action.REFRESH_CONTENT"
+
+        /** 通知更新锁 — Service 与 BroadcastReceiver 共享，防止并发更新导致 RemoteViews 异常 */
+        val notificationUpdateLock = Any()
+
+        /** 当前通知中展示的知识条目 — Service 与 Receiver 共享，防止 TTS 回调时回退内容 */
+        @Volatile
+        var currentNotificationItem: KnowledgeItem? = null
 
         /**
          * 启动前台服务并显示通知
@@ -67,13 +71,18 @@ class DailyNotificationService : Service() {
         }
 
         /**
-         * 发送更新通知的广播（用于 WorkManager 或外部触发刷新）
+         * 触发每日刷新（用于 WorkManager 或外部触发）
+         * 直接启动前台服务并传入 REFRESH_CONTENT action
          */
-        fun sendRefreshBroadcast(context: Context) {
-            val intent = Intent(context, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_REFRESH
+        fun triggerDailyRefresh(context: Context) {
+            val intent = Intent(context, DailyNotificationService::class.java).apply {
+                action = ACTION_REFRESH_CONTENT
             }
-            context.sendBroadcast(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
     }
 
@@ -96,35 +105,58 @@ class DailyNotificationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP_SERVICE) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        try {
-            // 必须先立即调用 startForeground()，否则 Android 8+ 会在 5 秒后杀进程
-            val placeholderNotification = buildPlaceholderNotification()
-            startForeground(NOTIFICATION_ID, placeholderNotification)
-
-            // 异步加载知识并更新通知
-            serviceScope.launch {
+        when {
+            intent?.action == ACTION_STOP_SERVICE -> {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            intent?.action == ACTION_REFRESH_CONTENT -> {
+                // 每日刷新：确保前台服务运行 + 推进每日推送
                 try {
-                    val item = repository.getCurrentPushItem()
-                    if (item != null) {
-                        currentItem = item
-                        showNotification(item)
-                    } else {
-                        updatePlaceholderText("请先导入知识文件")
+                    startForeground(NOTIFICATION_ID, buildPlaceholderNotification())
+                    serviceScope.launch {
+                        try {
+                            val item = repository.getDailyPushItem()
+                            if (item != null) {
+                                currentItem = item
+                                showNotification(item)
+                            } else {
+                                updatePlaceholderText("请先导入知识文件")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "加载通知内容失败", e)
+                        }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "加载通知内容失败", e)
+                    Log.e(TAG, "启动前台服务失败", e)
+                    stopSelf()
+                    return START_NOT_STICKY
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "启动前台服务失败", e)
-            stopSelf()
-            return START_NOT_STICKY
+            else -> {
+                // 普通启动：显示当前知识
+                try {
+                    startForeground(NOTIFICATION_ID, buildPlaceholderNotification())
+                    serviceScope.launch {
+                        try {
+                            val item = repository.getCurrentPushItem()
+                            if (item != null) {
+                                currentItem = item
+                                showNotification(item)
+                            } else {
+                                updatePlaceholderText("请先导入知识文件")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "加载通知内容失败", e)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "启动前台服务失败", e)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+            }
         }
 
         return START_STICKY
@@ -179,6 +211,7 @@ class DailyNotificationService : Service() {
      */
     private suspend fun showNotification(item: KnowledgeItem) {
         currentItem = item
+        currentNotificationItem = item  // 同步共享状态
         val remoteViews = buildRemoteViews(item)
         val isFavorite = repository.getItemById(item.id)?.isFavorite ?: false
         updateFavoriteButton(remoteViews, isFavorite)
@@ -190,18 +223,21 @@ class DailyNotificationService : Service() {
 
     /**
      * 刷新通知（不改变内容，仅更新按钮状态）
+     * 使用共享的 currentNotificationItem，防止 Receiver 更新内容后被回退
      */
     private fun refreshNotification() {
-        val item = currentItem ?: return
+        val item = currentNotificationItem ?: return
         serviceScope.launch {
-            val remoteViews = buildRemoteViews(item)
-            val isFavorite = repository.getItemById(item.id)?.isFavorite ?: false
-            updateFavoriteButton(remoteViews, isFavorite)
-            updateTtsButton(remoteViews)
+            synchronized(notificationUpdateLock) {
+                val remoteViews = buildRemoteViews(item)
+                val isFavorite = repository.getItemById(item.id)?.isFavorite ?: false
+                updateFavoriteButton(remoteViews, isFavorite)
+                updateTtsButton(remoteViews)
 
-            val notification = buildNotification(remoteViews)
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.notify(NOTIFICATION_ID, notification)
+                val notification = buildNotification(remoteViews)
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notify(NOTIFICATION_ID, notification)
+            }
         }
     }
 

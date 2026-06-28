@@ -22,8 +22,8 @@ class DailyNotificationWorker(
         return try {
             Log.d(TAG, "开始每日推送任务")
 
-            // 通过广播触发通知刷新
-            DailyNotificationService.sendRefreshBroadcast(applicationContext)
+            // 直接启动前台服务进行每日刷新（传入 REFRESH_CONTENT action）
+            DailyNotificationService.triggerDailyRefresh(applicationContext)
 
             Log.d(TAG, "每日推送任务完成")
             Result.success()

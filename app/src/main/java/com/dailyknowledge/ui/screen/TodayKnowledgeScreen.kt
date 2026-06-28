@@ -48,21 +48,14 @@ fun TodayKnowledgeScreen(
         }
     }
 
-    // 首次加载
-    LaunchedEffect(Unit) {
-        viewModel.loadCurrentKnowledge()
-    }
-
     // 首次使用引导
     if (!hasActiveSource && !isLoading) {
         EmptyStateView(onImportClick = onNavigateToImport)
         return
     }
 
-    // 时间选择器状态
+    // 时间选择器状态（每次读取最新值，不缓存）
     val prefs = remember { PreferencesManager(context) }
-    val savedHour = remember { prefs.getNotificationHour() }
-    val savedMinute = remember { prefs.getNotificationMinute() }
 
     Scaffold(
         topBar = {
@@ -75,6 +68,9 @@ fun TodayKnowledgeScreen(
                 actions = {
                     // 设置通知时间
                     IconButton(onClick = {
+                        // 每次打开都读取最新保存的时间
+                        val currentHour = prefs.getNotificationHour()
+                        val currentMinute = prefs.getNotificationMinute()
                         TimePickerDialog(
                             context,
                             { _, hour, minute ->
@@ -86,8 +82,8 @@ fun TodayKnowledgeScreen(
                                     Toast.LENGTH_SHORT
                                 ).show()
                             },
-                            savedHour,
-                            savedMinute,
+                            currentHour,
+                            currentMinute,
                             true // is24HourView
                         ).show()
                     }) {

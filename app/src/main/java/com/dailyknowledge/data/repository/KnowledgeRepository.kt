@@ -7,6 +7,8 @@ import com.dailyknowledge.data.model.KnowledgeFile
 import com.dailyknowledge.data.model.KnowledgeItem
 import com.dailyknowledge.util.PreferencesManager
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -23,6 +25,9 @@ class KnowledgeRepository(private val context: Context) {
     private val fileDao = db.knowledgeFileDao()
     private val itemDao = db.knowledgeItemDao()
     private val prefs = PreferencesManager(context)
+
+    /** 每日推送互斥锁 — 防止并发调用导致索引多次推进 */
+    private val dailyPushMutex = Mutex()
 
     // ==================== 文件管理 ====================
 
@@ -131,20 +136,31 @@ class KnowledgeRepository(private val context: Context) {
         return items
     }
 
-    /** 简单的 CSV 行解析（处理引号内的逗号） */
+    /** 简单的 CSV 行解析（处理引号内的逗号及转义引号 ""） */
     private fun parseCsvLine(line: String): List<String> {
         val result = mutableListOf<String>()
         val current = StringBuilder()
         var inQuotes = false
-        for (char in line) {
+        var i = 0
+        while (i < line.length) {
+            val char = line[i]
             when {
-                char == '"' -> inQuotes = !inQuotes
+                char == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
+                    // 转义的双引号 ""
+                    current.append('"')
+                    i += 2
+                    continue
+                }
+                char == '"' -> {
+                    inQuotes = !inQuotes
+                }
                 char == ',' && !inQuotes -> {
                     result.add(current.toString())
                     current.clear()
                 }
                 else -> current.append(char)
             }
+            i++
         }
         result.add(current.toString())
         return result
@@ -222,19 +238,19 @@ class KnowledgeRepository(private val context: Context) {
         return itemDao.getItemByFileAndIndex(activeFile.id, prevIndex)
     }
 
-    /** 每日推送：若今天还未推送则推进索引 */
-    suspend fun getDailyPushItem(): KnowledgeItem? {
+    /** 每日推送：若今天还未推送则推进索引（互斥保护，防止并发推进多次） */
+    suspend fun getDailyPushItem(): KnowledgeItem? = dailyPushMutex.withLock {
         val today = SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(Date())
         val lastDate = prefs.getLastPushDate()
 
         if (lastDate != today) {
             // 今天还没推送过，推进索引
             prefs.setLastPushDate(today)
-            return moveToNextItem()
+            return@withLock moveToNextItem()
         }
 
         // 今天已推送过，返回当前索引的知识
-        return getCurrentPushItem()
+        return@withLock getCurrentPushItem()
     }
 
     /** 按 ID 获取条目 */

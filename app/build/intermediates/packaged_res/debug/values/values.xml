@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">每日小知识</string>
+    <string name="btn_activate">设为当前知识源</string>
+    <string name="btn_close">关闭</string>
+    <string name="btn_delete">删除</string>
+    <string name="btn_favorite">收藏</string>
+    <string name="btn_import">导入文件</string>
+    <string name="btn_next">下一页</string>
+    <string name="btn_prev">上一页</string>
+    <string name="btn_read_aloud">朗读</string>
+    <string name="btn_search">搜索</string>
+    <string name="btn_share">分享</string>
+    <string name="hint_activated">已设为当前知识源</string>
+    <string name="hint_empty_file">文件中无有效内容</string>
+    <string name="hint_file_deleted">已删除</string>
+    <string name="hint_import_first">首次使用，请先导入知识文件（.txt 或 .csv）</string>
+    <string name="hint_import_success">导入成功：%1$s（%2$d条知识）</string>
+    <string name="hint_no_knowledge">暂无知识，请先导入文件</string>
+    <string name="hint_no_results">未找到匹配的知识</string>
+    <string name="hint_parse_failed">文件解析失败，请检查格式</string>
+    <string name="hint_search">搜索知识内容…</string>
+    <string name="hint_tts_unavailable">朗读功能不可用</string>
+    <string name="label_active">使用中</string>
+    <string name="label_favorited">已收藏</string>
+    <string name="label_file_name">文件名</string>
+    <string name="label_import_time">导入时间</string>
+    <string name="label_knowledge_count">知识条数</string>
+    <string name="notification_channel_desc">在通知栏固定显示每日知识</string>
+    <string name="notification_channel_name">每日知识推送</string>
+    <string name="notification_title">每日小知识</string>
+    <string name="permission_notification_rationale">通知权限用于在通知栏显示每日知识，请允许</string>
+    <string name="permission_notification_title">需要通知权限</string>
+    <string name="share_from">——来自每日小知识App</string>
+    <string name="share_subject">分享知识</string>
+    <string name="tab_favorites">收藏</string>
+    <string name="tab_library">知识库</string>
+    <string name="tab_search">搜索</string>
+    <string name="tab_today">今日知识</string>
+    <style name="Theme.DailyKnowledge" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
