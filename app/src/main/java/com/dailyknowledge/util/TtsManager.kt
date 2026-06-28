@@ -56,19 +56,22 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
         onTtsReady?.invoke(isInitialized)
     }
 
-    /** 朗读文本；若正在朗读则停止 */
-    fun speakOrStop(text: String) {
-        if (!isInitialized || tts == null) return
+    /**
+     * 朗读文本；若正在朗读则停止。
+     * @return 操作结果：true=已开始朗读或已停止，false=TTS 不可用
+     */
+    fun speakOrStop(text: String): Boolean {
+        if (!isInitialized || tts == null) return false
 
         if (isSpeaking) {
-            tts!!.stop()
+            tts?.stop()
             isSpeaking = false
-            return
+            return true
         }
 
-        // Android Lollipop+ 使用 speak(CharSequence, ...)
         val utteranceId = "knowledge_${System.currentTimeMillis()}"
-        tts!!.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        return true
     }
 
     /** 停止朗读 */

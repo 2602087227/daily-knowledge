@@ -27,7 +27,8 @@ class DailyNotificationService : Service() {
     private lateinit var repository: KnowledgeRepository
     private lateinit var ttsManager: TtsManager
     private var currentItem: KnowledgeItem? = null
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    // 必须用 Main 线程 — startForeground / NotificationManager.notify 须在主线程调用
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var isTtsReady = false
 
     companion object {
@@ -150,11 +151,16 @@ class DailyNotificationService : Service() {
     /**
      * 构建 RemoteViews
      */
-    private fun buildRemoteViews(item: KnowledgeItem): RemoteViews {
+    private suspend fun buildRemoteViews(item: KnowledgeItem): RemoteViews {
         val remoteViews = RemoteViews(packageName, R.layout.notification_daily_knowledge)
 
         // 设置知识内容
         remoteViews.setTextViewText(R.id.tv_knowledge_content, item.content)
+
+        // 设置进度：第n条/共m条
+        val totalCount = repository.getActiveFile()?.knowledgeCount ?: 0
+        val progressText = "${item.indexInFile + 1}/$totalCount"
+        remoteViews.setTextViewText(R.id.tv_progress, progressText)
 
         // 绑定按钮点击事件
         setButtonClick(remoteViews, R.id.btn_prev, NotificationActionReceiver.ACTION_NAV_PREV)
@@ -162,7 +168,6 @@ class DailyNotificationService : Service() {
         setButtonClick(remoteViews, R.id.btn_read_aloud, NotificationActionReceiver.ACTION_TTS_TOGGLE)
         setButtonClick(remoteViews, R.id.btn_favorite, NotificationActionReceiver.ACTION_FAVORITE_TOGGLE)
         setButtonClick(remoteViews, R.id.btn_share, NotificationActionReceiver.ACTION_SHARE)
-        setButtonClick(remoteViews, R.id.btn_close, NotificationActionReceiver.ACTION_CLOSE)
 
         return remoteViews
     }

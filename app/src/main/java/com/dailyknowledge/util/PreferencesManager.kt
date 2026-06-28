@@ -17,6 +17,12 @@ class PreferencesManager(context: Context) {
         private const val KEY_CURRENT_PUSH_INDEX = "current_push_index"
         private const val KEY_LAST_PUSH_DATE = "last_push_date"
         private const val KEY_ACTIVE_FILE_ID = "active_file_id"
+        private const val KEY_NOTIFICATION_HOUR = "notification_hour"
+        private const val KEY_NOTIFICATION_MINUTE = "notification_minute"
+
+        /** 默认推送时间：早上 8:00 */
+        const val DEFAULT_HOUR = 8
+        const val DEFAULT_MINUTE = 0
     }
 
     // ==================== 推送索引 ====================
@@ -63,5 +69,25 @@ class PreferencesManager(context: Context) {
     /** 清除激活文件 ID */
     fun clearActiveFileId() {
         prefs.edit().remove(KEY_ACTIVE_FILE_ID).apply()
+    }
+
+    // ==================== 通知时间 ====================
+
+    /** 获取通知小时（0-23） */
+    fun getNotificationHour(): Int {
+        return prefs.getInt(KEY_NOTIFICATION_HOUR, DEFAULT_HOUR)
+    }
+
+    /** 获取通知分钟（0-59） */
+    fun getNotificationMinute(): Int {
+        return prefs.getInt(KEY_NOTIFICATION_MINUTE, DEFAULT_MINUTE)
+    }
+
+    /** 设置通知时间 */
+    fun setNotificationTime(hour: Int, minute: Int) {
+        prefs.edit()
+            .putInt(KEY_NOTIFICATION_HOUR, hour)
+            .putInt(KEY_NOTIFICATION_MINUTE, minute)
+            .apply()
     }
 }

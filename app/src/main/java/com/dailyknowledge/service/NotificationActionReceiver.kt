@@ -20,7 +20,6 @@ import kotlinx.coroutines.*
  * - ACTION_TTS_TOGGLE：朗读/停止朗读
  * - ACTION_FAVORITE_TOGGLE：收藏/取消收藏
  * - ACTION_SHARE：分享当前知识
- * - ACTION_CLOSE：关闭通知（停止前台服务）
  * - ACTION_REFRESH：从外部触发刷新通知内容
  */
 class NotificationActionReceiver : BroadcastReceiver() {
@@ -33,11 +32,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val ACTION_TTS_TOGGLE = "com.dailyknowledge.action.TTS_TOGGLE"
         const val ACTION_FAVORITE_TOGGLE = "com.dailyknowledge.action.FAVORITE_TOGGLE"
         const val ACTION_SHARE = "com.dailyknowledge.action.SHARE"
-        const val ACTION_CLOSE = "com.dailyknowledge.action.CLOSE"
         const val ACTION_REFRESH = "com.dailyknowledge.action.REFRESH"
+
+        /** 通知更新锁 — 防止并发更新导致 RemoteViews 异常 */
+        private val updateLock = Any()
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    // 必须用 Main 线程 — NotificationManager.notify() 和相关 PendingIntent 操作须在主线程
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
@@ -51,7 +53,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
             ACTION_TTS_TOGGLE -> handleTtsToggle(context, repository, ttsManager)
             ACTION_FAVORITE_TOGGLE -> handleFavoriteToggle(context, repository)
             ACTION_SHARE -> handleShare(context, repository)
-            ACTION_CLOSE -> handleClose(context)
             ACTION_REFRESH -> handleRefresh(context, repository)
         }
     }
@@ -94,7 +95,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
             try {
                 val currentItem = repository.getCurrentPushItem()
                 if (currentItem != null) {
-                    ttsManager.speakOrStop(currentItem.content)
+                    val ok = ttsManager.speakOrStop(currentItem.content)
+                    if (!ok) {
+                        // TTS 不可用，弹 Toast 提示
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "朗读引擎未就绪，请检查系统 TTS 设置",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
                 }
                 // TTS 状态变化会通过回调自动刷新通知
             } catch (e: Exception) {
@@ -133,11 +144,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
         }
     }
 
-    /** 关闭通知（停止前台服务） */
-    private fun handleClose(context: Context) {
-        DailyNotificationService.stop(context)
-    }
-
     /** 刷新通知内容（由 WorkManager 等外部触发） */
     private fun handleRefresh(context: Context, repository: KnowledgeRepository) {
         scope.launch {
@@ -161,28 +167,37 @@ class NotificationActionReceiver : BroadcastReceiver() {
         repository: KnowledgeRepository,
         item: com.dailyknowledge.data.model.KnowledgeItem
     ) {
-        // 直接通过 NotificationManager 更新 RemoteViews
-        val remoteViews = android.widget.RemoteViews(
-            context.packageName,
-            com.dailyknowledge.R.layout.notification_daily_knowledge
-        )
-        remoteViews.setTextViewText(
-            com.dailyknowledge.R.id.tv_knowledge_content,
-            item.content
-        )
+        // 加锁防止双击导致的并发更新崩溃
+        synchronized(updateLock) {
+            val remoteViews = android.widget.RemoteViews(
+                context.packageName,
+                com.dailyknowledge.R.layout.notification_daily_knowledge
+            )
+            // 知识内容
+            remoteViews.setTextViewText(
+                com.dailyknowledge.R.id.tv_knowledge_content,
+                item.content
+            )
+            // 进度：第n条/共m条
+            val activeFile = repository.getActiveFile()
+            val totalCount = activeFile?.knowledgeCount ?: 0
+            remoteViews.setTextViewText(
+                com.dailyknowledge.R.id.tv_progress,
+                "${item.indexInFile + 1}/$totalCount"
+            )
+            // 收藏按钮状态
+            val isFavorite = item.isFavorite
+            val favText = if (isFavorite) "★ 已收藏" else "☆ 收藏"
+            remoteViews.setTextViewText(com.dailyknowledge.R.id.btn_favorite, favText)
 
-        // 更新收藏按钮
-        val isFavorite = item.isFavorite
-        val favText = if (isFavorite) "★ 已收藏" else "☆ 收藏"
-        remoteViews.setTextViewText(com.dailyknowledge.R.id.btn_favorite, favText)
+            // 绑定按钮事件
+            bindNotificationButtons(context, remoteViews)
 
-        // 绑定按钮事件
-        bindNotificationButtons(context, remoteViews)
-
-        // 构建并发送通知
-        val notification = buildUpdatedNotification(context, remoteViews)
-        val manager = context.getSystemService(NotificationManager::class.java)
-        manager.notify(DailyNotificationService.NOTIFICATION_ID, notification)
+            // 构建并发送通知
+            val notification = buildUpdatedNotification(context, remoteViews)
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.notify(DailyNotificationService.NOTIFICATION_ID, notification)
+        }
     }
 
     /** 刷新通知（保持内容不变，仅刷新按钮状态） */
@@ -201,8 +216,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             com.dailyknowledge.R.id.btn_next to ACTION_NAV_NEXT,
             com.dailyknowledge.R.id.btn_read_aloud to ACTION_TTS_TOGGLE,
             com.dailyknowledge.R.id.btn_favorite to ACTION_FAVORITE_TOGGLE,
-            com.dailyknowledge.R.id.btn_share to ACTION_SHARE,
-            com.dailyknowledge.R.id.btn_close to ACTION_CLOSE
+            com.dailyknowledge.R.id.btn_share to ACTION_SHARE
         )
 
         val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {

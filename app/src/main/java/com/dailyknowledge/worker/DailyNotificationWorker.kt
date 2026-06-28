@@ -39,17 +39,20 @@ class DailyNotificationWorker(
 
         /**
          * 调度每日通知任务
-         * 每天早上 8:00 左右执行
+         * 使用用户自定义时间，默认 8:00
          */
         fun schedule(context: Context) {
-            // 计算距离明天早上 8:00 的延迟时间
+            val prefs = com.dailyknowledge.util.PreferencesManager(context)
+            val hour = prefs.getNotificationHour()
+            val minute = prefs.getNotificationMinute()
+
+            // 计算距离目标时间的延迟
             val now = java.util.Calendar.getInstance()
             val targetTime = java.util.Calendar.getInstance().apply {
-                set(java.util.Calendar.HOUR_OF_DAY, 8)
-                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.HOUR_OF_DAY, hour)
+                set(java.util.Calendar.MINUTE, minute)
                 set(java.util.Calendar.SECOND, 0)
                 set(java.util.Calendar.MILLISECOND, 0)
-                // 如果今天 8:00 已过，设为明天 8:00
                 if (before(now)) {
                     add(java.util.Calendar.DAY_OF_YEAR, 1)
                 }

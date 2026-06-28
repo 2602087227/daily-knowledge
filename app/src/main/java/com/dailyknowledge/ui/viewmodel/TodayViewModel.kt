@@ -5,8 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyknowledge.data.model.KnowledgeItem
 import com.dailyknowledge.data.repository.KnowledgeRepository
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 
 /**
  * 今日知识 ViewModel — 管理当前推送的知识
@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 class TodayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = KnowledgeRepository(application)
+    private var loadJob: Job? = null
 
     /** 当前知识条目 */
     private val _currentItem = MutableStateFlow<KnowledgeItem?>(null)
@@ -23,32 +24,49 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    /** 错误消息 */
-    private val _errorMessage = MutableSharedFlow<String>()
+    /** 错误消息 — 带缓冲区避免 emit 挂起 */
+    private val _errorMessage = MutableSharedFlow<String>(
+        replay = 0,
+        extraBufferCapacity = 3,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val errorMessage: SharedFlow<String> = _errorMessage.asSharedFlow()
 
     /** 是否有激活的知识源 */
     private val _hasActiveSource = MutableStateFlow(false)
     val hasActiveSource: StateFlow<Boolean> = _hasActiveSource.asStateFlow()
 
+    /** Toast 提示（一次性事件） */
+    private val _toastEvent = MutableSharedFlow<String>(
+        replay = 0,
+        extraBufferCapacity = 2,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
+
     init {
         loadCurrentKnowledge()
     }
 
-    /** 加载当前推送的知识 */
+    /** 加载当前推送的知识（取消上一次未完成的加载） */
     fun loadCurrentKnowledge() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _isLoading.value = true
             try {
-                // 获取今日推送的知识（如需则自动推进索引）
-                val item = repository.getDailyPushItem()
+                val item = withContext(Dispatchers.IO) {
+                    repository.getDailyPushItem()
+                }
                 _currentItem.value = item
 
-                // 检查是否有激活的知识源
-                val activeFile = repository.getActiveFile()
+                val activeFile = withContext(Dispatchers.IO) {
+                    repository.getActiveFile()
+                }
                 _hasActiveSource.value = activeFile != null
+            } catch (e: CancellationException) {
+                // 被取消，忽略
             } catch (e: Exception) {
-                _errorMessage.emit("加载知识失败: ${e.message}")
+                _toastEvent.tryEmit("加载失败: ${e.message}")
             } finally {
                 _isLoading.value = false
             }
@@ -57,37 +75,53 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 切换到上一条 */
     fun moveToPrev() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             try {
-                val item = repository.moveToPrevItem()
+                val item = withContext(Dispatchers.IO) {
+                    repository.moveToPrevItem()
+                }
                 _currentItem.value = item
+            } catch (e: CancellationException) {
+                // ignored
             } catch (e: Exception) {
-                _errorMessage.emit("切换失败: ${e.message}")
+                _toastEvent.tryEmit("切换失败: ${e.message}")
             }
         }
     }
 
     /** 切换到下一条 */
     fun moveToNext() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             try {
-                val item = repository.moveToNextItem()
+                val item = withContext(Dispatchers.IO) {
+                    repository.moveToNextItem()
+                }
                 _currentItem.value = item
+            } catch (e: CancellationException) {
+                // ignored
             } catch (e: Exception) {
-                _errorMessage.emit("切换失败: ${e.message}")
+                _toastEvent.tryEmit("切换失败: ${e.message}")
             }
         }
     }
 
-    /** 切换收藏状态 */
+    /** 切换收藏状态 — 直接更新本地状态，避免重新加载 */
     fun toggleFavorite(itemId: Long) {
         viewModelScope.launch {
             try {
-                repository.toggleFavorite(itemId)
-                // 刷新当前条目以更新收藏状态
-                loadCurrentKnowledge()
+                withContext(Dispatchers.IO) {
+                    repository.toggleFavorite(itemId)
+                }
+                // 原地更新 isFavorite 标志，不重新查询
+                _currentItem.value?.let { item ->
+                    if (item.id == itemId) {
+                        _currentItem.value = item.copy(isFavorite = !item.isFavorite)
+                    }
+                }
             } catch (e: Exception) {
-                _errorMessage.emit("收藏操作失败: ${e.message}")
+                _toastEvent.tryEmit("收藏失败: ${e.message}")
             }
         }
     }

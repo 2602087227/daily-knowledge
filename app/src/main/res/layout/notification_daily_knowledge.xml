@@ -29,7 +29,7 @@
         android:ellipsize="end"
         android:paddingBottom="10dp" />
 
-    <!-- 按钮行1：上一页 | 朗读 | 收藏 -->
+    <!-- 按钮行1：上一页 | 第n条/共m条 | 下一条 -->
     <LinearLayout
         android:id="@+id/ll_buttons_row1"
         android:layout_width="match_parent"
@@ -49,6 +49,41 @@
             android:clickable="true"
             android:focusable="true"
             android:background="@drawable/btn_notification_bg" />
+
+        <TextView
+            android:id="@+id/tv_progress"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:text="1/100"
+            android:textColor="#666666"
+            android:textSize="12sp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp" />
+
+        <TextView
+            android:id="@+id/btn_next"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="下一页 ▶"
+            android:textColor="#1976D2"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/btn_notification_bg" />
+
+    </LinearLayout>
+
+    <!-- 按钮行2：朗读 | 收藏 | 分享 -->
+    <LinearLayout
+        android:id="@+id/ll_buttons_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="2dp">
 
         <TextView
             android:id="@+id/btn_read_aloud"
@@ -76,17 +111,6 @@
             android:focusable="true"
             android:background="@drawable/btn_notification_bg" />
 
-    </LinearLayout>
-
-    <!-- 按钮行2：分享 | 下一页 | 关闭 -->
-    <LinearLayout
-        android:id="@+id/ll_buttons_row2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="2dp">
-
         <TextView
             android:id="@+id/btn_share"
             android:layout_width="0dp"
@@ -95,32 +119,6 @@
             android:gravity="center"
             android:text="📤 分享"
             android:textColor="#1976D2"
-            android:textSize="13sp"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/btn_notification_bg" />
-
-        <TextView
-            android:id="@+id/btn_next"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="下一页 ▶"
-            android:textColor="#1976D2"
-            android:textSize="13sp"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/btn_notification_bg" />
-
-        <TextView
-            android:id="@+id/btn_close"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="✕ 关闭"
-            android:textColor="#E53935"
             android:textSize="13sp"
             android:clickable="true"
             android:focusable="true"

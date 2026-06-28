@@ -45,10 +45,14 @@ fun KnowledgeLibraryScreen(
     val importState by viewModel.importState.collectAsState()
     val deleteConfirmFileId by viewModel.deleteConfirmFileId.collectAsState()
 
+    // 防止双击重复启动文件选择器导致崩溃
+    var pickerLaunched by remember { mutableStateOf(false) }
+
     // 文件选择器
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
+        pickerLaunched = false  // 选择器返回/取消后重置标志
         uri?.let {
             // 从 ContentResolver 获取文件名
             val cursor = viewModel.getApplication<android.app.Application>()
@@ -63,6 +67,19 @@ fun KnowledgeLibraryScreen(
                 }
             }
             viewModel.importFile(uri, fileName)
+        }
+    }
+
+    /** 安全打开文件选择器（防双击崩溃） */
+    fun safeLaunchPicker() {
+        if (!pickerLaunched) {
+            pickerLaunched = true
+            filePickerLauncher.launch(arrayOf(
+                "text/plain",
+                "text/csv",
+                "text/comma-separated-values",
+                "*/*"
+            ))
         }
     }
 
@@ -100,14 +117,7 @@ fun KnowledgeLibraryScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
-                    IconButton(onClick = {
-                        filePickerLauncher.launch(arrayOf(
-                            "text/plain",
-                            "text/csv",
-                            "text/comma-separated-values",
-                            "*/*"
-                        ))
-                    }) {
+                    IconButton(onClick = { safeLaunchPicker() }) {
                         Icon(Icons.Default.Add, contentDescription = "导入文件", tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
@@ -132,14 +142,7 @@ fun KnowledgeLibraryScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("还没有导入任何知识文件", style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.height(12.dp))
-                Button(onClick = {
-                    filePickerLauncher.launch(arrayOf(
-                        "text/plain",
-                        "text/csv",
-                        "text/comma-separated-values",
-                        "*/*"
-                    ))
-                }) {
+                Button(onClick = { safeLaunchPicker() }) {
                     Icon(Icons.Default.FileOpen, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("导入文件")

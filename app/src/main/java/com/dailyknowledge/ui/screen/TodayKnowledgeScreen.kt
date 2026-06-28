@@ -1,5 +1,7 @@
 package com.dailyknowledge.ui.screen
 
+import android.app.TimePickerDialog
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,18 +12,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dailyknowledge.data.model.KnowledgeItem
 import com.dailyknowledge.ui.viewmodel.TodayViewModel
+import com.dailyknowledge.util.PreferencesManager
+import com.dailyknowledge.worker.DailyNotificationWorker
+import java.text.SimpleDateFormat
+import java.util.*
 
 /**
  * 今日知识页 — 显示当天推送的知识
- * 包含：内容展示、导航按钮（上/下一条）、朗读、收藏、分享
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,16 +39,30 @@ fun TodayKnowledgeScreen(
     val currentItem by viewModel.currentItem.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val hasActiveSource by viewModel.hasActiveSource.collectAsState()
+    val context = LocalContext.current
 
+    // 收集一次性事件（Toast）
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 首次加载
     LaunchedEffect(Unit) {
         viewModel.loadCurrentKnowledge()
     }
 
     // 首次使用引导
-    if (!hasActiveSource) {
+    if (!hasActiveSource && !isLoading) {
         EmptyStateView(onImportClick = onNavigateToImport)
         return
     }
+
+    // 时间选择器状态
+    val prefs = remember { PreferencesManager(context) }
+    val savedHour = remember { prefs.getNotificationHour() }
+    val savedMinute = remember { prefs.getNotificationMinute() }
 
     Scaffold(
         topBar = {
@@ -50,30 +71,70 @@ fun TodayKnowledgeScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                ),
+                actions = {
+                    // 设置通知时间
+                    IconButton(onClick = {
+                        TimePickerDialog(
+                            context,
+                            { _, hour, minute ->
+                                prefs.setNotificationTime(hour, minute)
+                                DailyNotificationWorker.schedule(context)
+                                Toast.makeText(
+                                    context,
+                                    "通知时间已设为 ${"%02d:%02d".format(hour, minute)}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            savedHour,
+                            savedMinute,
+                            true // is24HourView
+                        ).show()
+                    }) {
+                        Icon(
+                            Icons.Default.Schedule,
+                            contentDescription = "设置通知时间",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
             )
-        }
     ) { paddingValues ->
-        if (isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
+        when {
+            isLoading && currentItem == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
-        } else if (currentItem == null) {
-            EmptyStateView(onImportClick = onNavigateToImport)
-        } else {
-            KnowledgeDetailView(
-                item = currentItem!!,
-                paddingValues = paddingValues,
-                onPrev = { viewModel.moveToPrev() },
-                onNext = { viewModel.moveToNext() },
-                onToggleFavorite = { viewModel.toggleFavorite(currentItem!!.id) },
-                onShare = { viewModel.shareKnowledge(currentItem!!.content) }
-            )
+
+            currentItem == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("加载中…", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                }
+            }
+
+            else -> {
+                // 捕获当前条目值，避免 lambda 中延迟求值到 null
+                val item = currentItem!!
+                KnowledgeDetailView(
+                    item = item,
+                    paddingValues = paddingValues,
+                    onPrev = { viewModel.moveToPrev() },
+                    onNext = { viewModel.moveToNext() },
+                    onToggleFavorite = { viewModel.toggleFavorite(item.id) },
+                    onShare = { viewModel.shareKnowledge(item.content) }
+                )
+            }
         }
     }
 }
@@ -108,16 +169,14 @@ private fun KnowledgeDetailView(
                 modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 日期标签
                 Text(
-                    text = java.text.SimpleDateFormat("yyyy年MM月dd日", java.util.Locale.CHINESE)
-                        .format(java.util.Date()),
+                    text = SimpleDateFormat("yyyy年MM月dd日", Locale.CHINESE)
+                        .format(Date()),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
-                // 知识内容
                 Text(
                     text = item.content,
                     style = MaterialTheme.typography.bodyLarge.copy(
@@ -128,7 +187,6 @@ private fun KnowledgeDetailView(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // 来源文件信息
                 Text(
                     text = "#${item.indexInFile + 1}",
                     style = MaterialTheme.typography.labelSmall,
@@ -140,19 +198,17 @@ private fun KnowledgeDetailView(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 操作按钮行
+        // 操作按钮行 1：上一页 / 下一页
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            // 上一页
             FilledTonalButton(onClick = onPrev) {
                 Icon(Icons.Default.ChevronLeft, contentDescription = "上一页")
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("上一页")
             }
 
-            // 下一页
             FilledTonalButton(onClick = onNext) {
                 Text("下一页")
                 Spacer(modifier = Modifier.width(4.dp))
@@ -162,11 +218,11 @@ private fun KnowledgeDetailView(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // 操作按钮行 2：收藏 / 分享
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            // 收藏
             val favIcon = if (item.isFavorite) Icons.Default.Star else Icons.Default.StarBorder
             val favLabel = if (item.isFavorite) "已收藏" else "收藏"
             FilledTonalButton(onClick = onToggleFavorite) {
@@ -175,7 +231,6 @@ private fun KnowledgeDetailView(
                 Text(favLabel)
             }
 
-            // 分享
             FilledTonalButton(onClick = onShare) {
                 Icon(Icons.Default.Share, contentDescription = "分享")
                 Spacer(modifier = Modifier.width(4.dp))
@@ -199,27 +254,21 @@ private fun EmptyStateView(onImportClick: () -> Unit) {
             modifier = Modifier.size(80.dp),
             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
         )
-
         Spacer(modifier = Modifier.height(16.dp))
-
         Text(
             text = "暂无知识",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
-
         Spacer(modifier = Modifier.height(8.dp))
-
         Text(
             text = "首次使用，请先导入知识文件\n支持 .txt（每行一条）和 .csv（第一列）",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
-
         Spacer(modifier = Modifier.height(24.dp))
-
         Button(onClick = onImportClick) {
             Icon(Icons.Default.FileOpen, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
