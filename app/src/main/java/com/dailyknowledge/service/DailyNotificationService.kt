@@ -127,9 +127,8 @@ class DailyNotificationService : Service() {
      */
     private fun refreshNotification() {
         val item = currentItem ?: return
-        val remoteViews = buildRemoteViews(item)
-
         serviceScope.launch {
+            val remoteViews = buildRemoteViews(item)
             val isFavorite = repository.getItemById(item.id)?.isFavorite ?: false
             updateFavoriteButton(remoteViews, isFavorite)
             updateTtsButton(remoteViews)

@@ -167,33 +167,28 @@ class NotificationActionReceiver : BroadcastReceiver() {
         repository: KnowledgeRepository,
         item: com.dailyknowledge.data.model.KnowledgeItem
     ) {
-        // 加锁防止双击导致的并发更新崩溃
+        // suspend 调用放在 synchronized 外部，避免"临界区内挂起"编译错误
+        val totalCount = repository.getActiveFile()?.knowledgeCount ?: 0
+        val isFavorite = item.isFavorite
+
         synchronized(updateLock) {
             val remoteViews = android.widget.RemoteViews(
                 context.packageName,
                 com.dailyknowledge.R.layout.notification_daily_knowledge
             )
-            // 知识内容
             remoteViews.setTextViewText(
                 com.dailyknowledge.R.id.tv_knowledge_content,
                 item.content
             )
-            // 进度：第n条/共m条
-            val activeFile = repository.getActiveFile()
-            val totalCount = activeFile?.knowledgeCount ?: 0
             remoteViews.setTextViewText(
                 com.dailyknowledge.R.id.tv_progress,
                 "${item.indexInFile + 1}/$totalCount"
             )
-            // 收藏按钮状态
-            val isFavorite = item.isFavorite
             val favText = if (isFavorite) "★ 已收藏" else "☆ 收藏"
             remoteViews.setTextViewText(com.dailyknowledge.R.id.btn_favorite, favText)
 
-            // 绑定按钮事件
             bindNotificationButtons(context, remoteViews)
 
-            // 构建并发送通知
             val notification = buildUpdatedNotification(context, remoteViews)
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.notify(DailyNotificationService.NOTIFICATION_ID, notification)
