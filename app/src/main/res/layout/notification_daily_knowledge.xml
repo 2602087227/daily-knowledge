@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@android:color/white">
+
+    <!-- 标题行 -->
+    <TextView
+        android:id="@+id/tv_notification_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="每日小知识"
+        android:textColor="@android:color/black"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:paddingBottom="8dp" />
+
+    <!-- 知识内容文本 -->
+    <TextView
+        android:id="@+id/tv_knowledge_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#333333"
+        android:textSize="15sp"
+        android:lineSpacingExtra="3dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:paddingBottom="10dp" />
+
+    <!-- 按钮行1：上一页 | 朗读 | 收藏 -->
+    <LinearLayout
+        android:id="@+id/ll_buttons_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/btn_prev"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="◀ 上一页"
+            android:textColor="#1976D2"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_read_aloud"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="🔊 朗读"
+            android:textColor="#1976D2"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_favorite"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="☆ 收藏"
+            android:textColor="#1976D2"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr/selectableItemBackground" />
+
+    </LinearLayout>
+
+    <!-- 按钮行2：分享 | 下一页 | 关闭 -->
+    <LinearLayout
+        android:id="@+id/ll_buttons_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="2dp">
+
+        <TextView
+            android:id="@+id/btn_share"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="📤 分享"
+            android:textColor="#1976D2"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr:selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_next"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="下一页 ▶"
+            android:textColor="#1976D2"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr:selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_close"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="✕ 关闭"
+            android:textColor="#E53935"
+            android:textSize="13sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr:selectableItemBackground" />
+
+    </LinearLayout>
+
+</LinearLayout>
