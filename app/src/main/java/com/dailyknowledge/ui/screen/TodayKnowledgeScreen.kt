@@ -99,6 +99,7 @@ fun TodayKnowledgeScreen(
                     }
                 }
             )
+        }
     ) { paddingValues ->
         when {
             isLoading && currentItem == null -> {
