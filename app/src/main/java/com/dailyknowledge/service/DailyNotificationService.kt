@@ -9,8 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
+import com.dailyknowledge.DailyKnowledgeApp
 import com.dailyknowledge.R
 import com.dailyknowledge.data.repository.KnowledgeRepository
 import com.dailyknowledge.data.model.KnowledgeItem
@@ -25,13 +27,21 @@ import kotlinx.coroutines.*
 class DailyNotificationService : Service() {
 
     private lateinit var repository: KnowledgeRepository
-    private lateinit var ttsManager: TtsManager
     private var currentItem: KnowledgeItem? = null
     // 必须用 Main 线程 — startForeground / NotificationManager.notify 须在主线程调用
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var isTtsReady = false
 
+    /** 取得 Application 级 TTS 单例（懒获取，避免 service 提前创建时失败） */
+    private val ttsManager: TtsManager?
+        get() = try {
+            DailyKnowledgeApp.getInstance().ttsManager
+        } catch (_: Exception) {
+            null
+        }
+
     companion object {
+        private const val TAG = "DailyNotificationSvc"
         const val CHANNEL_ID = "daily_knowledge_channel"
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP_SERVICE = "com.dailyknowledge.action.STOP_SERVICE"
@@ -70,16 +80,15 @@ class DailyNotificationService : Service() {
     override fun onCreate() {
         super.onCreate()
         repository = KnowledgeRepository(this)
-        ttsManager = TtsManager(this)
 
-        // 监听 TTS 就绪状态
-        ttsManager.setOnTtsReady { ready ->
+        // 监听 TTS 就绪状态（使用 App 单例）
+        ttsManager?.setOnTtsReady { ready ->
             isTtsReady = ready
             refreshNotification()
         }
 
         // 监听 TTS 朗读状态
-        ttsManager.setOnStatusChanged { speaking ->
+        ttsManager?.setOnStatusChanged { speaking ->
             refreshNotification()
         }
 
@@ -93,21 +102,29 @@ class DailyNotificationService : Service() {
             return START_NOT_STICKY
         }
 
-        // 必须先立即调用 startForeground()，否则 Android 8+ 会在 5 秒后杀进程
-        // 先显示一个空通知占位，再异步加载实际内容
-        val placeholderNotification = buildPlaceholderNotification()
-        startForeground(NOTIFICATION_ID, placeholderNotification)
+        try {
+            // 必须先立即调用 startForeground()，否则 Android 8+ 会在 5 秒后杀进程
+            val placeholderNotification = buildPlaceholderNotification()
+            startForeground(NOTIFICATION_ID, placeholderNotification)
 
-        // 异步加载知识并更新通知
-        serviceScope.launch {
-            val item = repository.getCurrentPushItem()
-            if (item != null) {
-                currentItem = item
-                showNotification(item)
-            } else {
-                // 无知识源：更新通知文字提示用户导入
-                updatePlaceholderText("请先导入知识文件")
+            // 异步加载知识并更新通知
+            serviceScope.launch {
+                try {
+                    val item = repository.getCurrentPushItem()
+                    if (item != null) {
+                        currentItem = item
+                        showNotification(item)
+                    } else {
+                        updatePlaceholderText("请先导入知识文件")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "加载通知内容失败", e)
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "启动前台服务失败", e)
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         return START_STICKY
@@ -250,7 +267,7 @@ class DailyNotificationService : Service() {
     private fun updateTtsButton(remoteViews: RemoteViews) {
         val text = when {
             !isTtsReady -> "🔇 朗读"
-            ttsManager.isSpeaking() -> "⏹ 停止"
+            ttsManager?.isSpeaking() == true -> "⏹ 停止"
             else -> "🔊 朗读"
         }
         remoteViews.setTextViewText(R.id.btn_read_aloud, text)

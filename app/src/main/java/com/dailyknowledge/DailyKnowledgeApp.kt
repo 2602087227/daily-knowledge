@@ -4,20 +4,16 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.util.Log
 import androidx.work.Configuration
-import androidx.work.WorkManager
 import com.dailyknowledge.worker.DailyNotificationWorker
 import com.dailyknowledge.util.TtsManager
 
 /**
  * Application 类 — 应用初始化入口
- * - 创建通知渠道
- * - 初始化 WorkManager（手动控制）
- * - 调度每日推送任务
  */
 class DailyKnowledgeApp : Application(), Configuration.Provider {
 
-    /** TTS 管理器 — 应用级单例，供通知栏和 App 内共用 */
     lateinit var ttsManager: TtsManager
         private set
 
@@ -25,19 +21,25 @@ class DailyKnowledgeApp : Application(), Configuration.Provider {
         super.onCreate()
         instance = this
 
-        // 创建通知渠道（Android 8.0+）
-        createNotificationChannel()
+        try {
+            createNotificationChannel()
+        } catch (e: Exception) {
+            Log.e(TAG, "创建通知渠道失败", e)
+        }
 
-        // 初始化 TTS 管理器
-        ttsManager = TtsManager(this)
+        try {
+            ttsManager = TtsManager(this)
+        } catch (e: Exception) {
+            Log.e(TAG, "初始化 TTS 失败", e)
+        }
 
-        // 调度每日推送任务
-        DailyNotificationWorker.schedule(this)
+        try {
+            DailyNotificationWorker.schedule(this)
+        } catch (e: Exception) {
+            Log.e(TAG, "调度通知任务失败", e)
+        }
     }
 
-    /**
-     * 创建通知渠道
-     */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -53,21 +55,21 @@ class DailyKnowledgeApp : Application(), Configuration.Provider {
         }
     }
 
-    /**
-     * WorkManager 配置 — 手动初始化
-     */
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setMinimumLoggingLevel(android.util.Log.INFO)
             .build()
 
     override fun onTerminate() {
-        ttsManager.shutdown()
+        try {
+            ttsManager.shutdown()
+        } catch (_: Exception) {}
         super.onTerminate()
     }
 
     companion object {
         const val CHANNEL_ID = "daily_knowledge_channel"
+        private const val TAG = "DailyKnowledgeApp"
 
         @Volatile
         private var instance: DailyKnowledgeApp? = null
