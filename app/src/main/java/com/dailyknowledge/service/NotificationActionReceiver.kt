@@ -26,6 +26,8 @@ import kotlinx.coroutines.*
 class NotificationActionReceiver : BroadcastReceiver() {
 
     companion object {
+        private const val TAG = "NotificationReceiver"
+
         const val ACTION_NAV_PREV = "com.dailyknowledge.action.NAV_PREV"
         const val ACTION_NAV_NEXT = "com.dailyknowledge.action.NAV_NEXT"
         const val ACTION_TTS_TOGGLE = "com.dailyknowledge.action.TTS_TOGGLE"
@@ -244,8 +246,3 @@ class NotificationActionReceiver : BroadcastReceiver() {
             .setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC)
             .build()
     }
-
-    companion object {
-        private const val TAG = "NotificationReceiver"
-    }
-}
