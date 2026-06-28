@@ -93,17 +93,66 @@ class DailyNotificationService : Service() {
             return START_NOT_STICKY
         }
 
-        // 加载知识并显示通知
+        // 必须先立即调用 startForeground()，否则 Android 8+ 会在 5 秒后杀进程
+        // 先显示一个空通知占位，再异步加载实际内容
+        val placeholderNotification = buildPlaceholderNotification()
+        startForeground(NOTIFICATION_ID, placeholderNotification)
+
+        // 异步加载知识并更新通知
         serviceScope.launch {
             val item = repository.getCurrentPushItem()
             if (item != null) {
                 currentItem = item
                 showNotification(item)
+            } else {
+                // 无知识源：更新通知文字提示用户导入
+                updatePlaceholderText("请先导入知识文件")
             }
         }
 
-        // START_STICKY：服务被杀后自动重启，但需要重新加载内容
         return START_STICKY
+    }
+
+    /** 构建占位通知（满足 startForeground 必须立即调用的要求） */
+    private fun buildPlaceholderNotification(): Notification {
+        val openIntent = Intent(this, MainActivity::class.java)
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val contentIntent = PendingIntent.getActivity(this, 0, openIntent, flags)
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText("加载中…")
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
+
+    /** 更新占位通知的文字提示 */
+    private fun updatePlaceholderText(text: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText(text)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this, 0,
+                    Intent(this, MainActivity::class.java),
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    else PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            )
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
