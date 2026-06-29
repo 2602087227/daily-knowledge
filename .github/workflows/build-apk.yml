@@ -23,12 +23,6 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
-      - name: 安装 Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: "8.5"
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
-
       - name: 配置 Android SDK 并接受许可
         run: |
           echo "sdk.dir=${ANDROID_SDK_ROOT}" > local.properties
