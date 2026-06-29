@@ -1,18 +1,21 @@
 package com.dailyknowledge.ui.screen
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dailyknowledge.DailyKnowledgeApp
 import com.dailyknowledge.ui.theme.FavoriteActive
 import com.dailyknowledge.ui.viewmodel.FavoritesViewModel
 
@@ -23,6 +26,40 @@ import com.dailyknowledge.ui.viewmodel.FavoritesViewModel
 @Composable
 fun FavoritesScreen(viewModel: FavoritesViewModel) {
     val favoriteItems by viewModel.favoriteItems.collectAsState()
+    val context = LocalContext.current
+
+    // 使用 App 全局单例 TTS
+    val ttsManager = remember { DailyKnowledgeApp.getInstance().ttsManager }
+    var isSpeaking by remember { mutableStateOf(false) }
+    var isTtsReady by remember { mutableStateOf(false) }
+
+    // 监听 TTS 状态
+    DisposableEffect(ttsManager) {
+        val tts = ttsManager
+        if (tts != null) {
+            isTtsReady = tts.isReady()
+            isSpeaking = tts.isSpeaking()
+            tts.setOnStatusChanged { speaking -> isSpeaking = speaking }
+            tts.setOnTtsReady { ready -> isTtsReady = ready }
+        }
+        onDispose { /* 不清除回调，App 单例需要持续使用 */ }
+    }
+
+    /** TTS 朗读/停止 */
+    fun handleTtsToggle(content: String) {
+        val tts = ttsManager
+        when {
+            tts == null ->
+                Toast.makeText(context, "朗读引擎不可用", Toast.LENGTH_SHORT).show()
+            !isTtsReady ->
+                Toast.makeText(context, "朗读引擎正在初始化，请稍后再试", Toast.LENGTH_SHORT).show()
+            else -> {
+                val ok = tts.speakOrStop(content)
+                if (!ok)
+                    Toast.makeText(context, "朗读失败，请检查系统 TTS 设置", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -73,6 +110,8 @@ fun FavoritesScreen(viewModel: FavoritesViewModel) {
                 items(favoriteItems, key = { it.id }) { item ->
                     FavoriteItemCard(
                         item = item,
+                        isSpeaking = isSpeaking,
+                        onTtsToggle = { handleTtsToggle(item.content) },
                         onRemoveFavorite = { viewModel.removeFavorite(item.id) },
                         onShare = { viewModel.shareKnowledge(item.content) }
                     )
@@ -86,6 +125,8 @@ fun FavoritesScreen(viewModel: FavoritesViewModel) {
 @Composable
 private fun FavoriteItemCard(
     item: com.dailyknowledge.data.model.KnowledgeItem,
+    isSpeaking: Boolean,
+    onTtsToggle: () -> Unit,
     onRemoveFavorite: () -> Unit,
     onShare: () -> Unit
 ) {
@@ -124,6 +165,22 @@ private fun FavoriteItemCard(
                     horizontalArrangement = Arrangement.End,
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    // 朗读
+                    TextButton(
+                        onClick = onTtsToggle,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        val icon = if (isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp
+                        val label = if (isSpeaking) "停止" else "朗读"
+                        Icon(
+                            icon,
+                            contentDescription = label,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(label, style = MaterialTheme.typography.labelSmall)
+                    }
+
                     // 取消收藏
                     TextButton(
                         onClick = onRemoveFavorite,

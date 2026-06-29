@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知栏完整视图 — QQ音乐风格，始终显示三排按钮 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="6dp"
+    android:background="@android:color/white">
+
+    <!-- 第一排：小知识内容（加粗、大字号、支持多行） -->
+    <TextView
+        android:id="@+id/tv_knowledge_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#1a1a1a"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:lineSpacingExtra="2dp"
+        android:paddingBottom="6dp" />
+
+    <!-- 第二排：上一条 | 第n条/共m条 | 下一条 -->
+    <LinearLayout
+        android:id="@+id/ll_buttons_row1"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="2dp">
+
+        <TextView
+            android:id="@+id/btn_prev"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="◀ 上一条"
+            android:textColor="#1976D2"
+            android:textSize="11sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/btn_notification_bg" />
+
+        <TextView
+            android:id="@+id/tv_progress"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="第1条/共100条"
+            android:textColor="#666666"
+            android:textSize="11sp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp" />
+
+        <TextView
+            android:id="@+id/btn_next"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="下一条 ▶"
+            android:textColor="#1976D2"
+            android:textSize="11sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/btn_notification_bg" />
+
+    </LinearLayout>
+
+    <!-- 第三排：朗读 | 收藏 | 分享 -->
+    <LinearLayout
+        android:id="@+id/ll_buttons_row2"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/btn_read_aloud"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="🔊 朗读"
+            android:textColor="#1976D2"
+            android:textSize="11sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/btn_notification_bg" />
+
+        <TextView
+            android:id="@+id/btn_favorite"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="☆ 收藏"
+            android:textColor="#1976D2"
+            android:textSize="11sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/btn_notification_bg" />
+
+        <TextView
+            android:id="@+id/btn_share"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="📤 分享"
+            android:textColor="#1976D2"
+            android:textSize="11sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/btn_notification_bg" />
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -21,16 +21,21 @@ import com.dailyknowledge.util.TtsManager
 import kotlinx.coroutines.*
 
 /**
- * 前台服务 — 在通知栏显示常驻每日知识通知
- * 使用自定义 RemoteViews 布局，支持按钮交互
+ * 前台服务 — 音乐播放器风格的常驻通知
+ * - startForeground() 仅在首次调用，后续统一用 NotificationManager.notify()
+ * - 固定 Notification ID，永远只有一条通知
+ * - setOnlyAlertOnce(true)：更新时不提示、不震动、不播放声音
+ * - 自定义 RemoteViews 布局，支持大文字、多行、按钮交互
  */
 class DailyNotificationService : Service() {
 
     private lateinit var repository: KnowledgeRepository
     private var currentItem: KnowledgeItem? = null
-    // 必须用 Main 线程 — startForeground / NotificationManager.notify 须在主线程调用
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var isTtsReady = false
+
+    /** startForeground() 是否已调用 — 确保只调用一次 */
+    private var hasStartedForeground = false
 
     /** 取得 Application 级 TTS 单例（可能为 null） */
     private val ttsManager: TtsManager?
@@ -42,17 +47,15 @@ class DailyNotificationService : Service() {
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP_SERVICE = "com.dailyknowledge.action.STOP_SERVICE"
         const val ACTION_REFRESH_CONTENT = "com.dailyknowledge.action.REFRESH_CONTENT"
+        const val ACTION_TTS = "com.dailyknowledge.action.SVC_TTS"
 
-        /** 通知更新锁 — Service 与 BroadcastReceiver 共享，防止并发更新导致 RemoteViews 异常 */
+        /** 通知更新锁 — Service 与 BroadcastReceiver 共享 */
         val notificationUpdateLock = Any()
 
-        /** 当前通知中展示的知识条目 — Service 与 Receiver 共享，防止 TTS 回调时回退内容 */
+        /** 当前通知中展示的知识条目 — Service 与 Receiver 共享 */
         @Volatile
         var currentNotificationItem: KnowledgeItem? = null
 
-        /**
-         * 启动前台服务并显示通知
-         */
         fun start(context: Context) {
             val intent = Intent(context, DailyNotificationService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -62,18 +65,11 @@ class DailyNotificationService : Service() {
             }
         }
 
-        /**
-         * 停止前台服务
-         */
         fun stop(context: Context) {
             val intent = Intent(context, DailyNotificationService::class.java)
             context.stopService(intent)
         }
 
-        /**
-         * 触发每日刷新（用于 WorkManager 或外部触发）
-         * 直接启动前台服务并传入 REFRESH_CONTENT action
-         */
         fun triggerDailyRefresh(context: Context) {
             val intent = Intent(context, DailyNotificationService::class.java).apply {
                 action = ACTION_REFRESH_CONTENT
@@ -90,18 +86,16 @@ class DailyNotificationService : Service() {
         super.onCreate()
         repository = KnowledgeRepository(this)
 
-        // 监听 TTS 就绪状态（使用 App 单例）
+        // 监听 TTS 就绪状态
         ttsManager?.setOnTtsReady { ready ->
             isTtsReady = ready
             refreshNotification()
         }
 
         // 监听 TTS 朗读状态
-        ttsManager?.setOnStatusChanged { speaking ->
+        ttsManager?.setOnStatusChanged { _ ->
             refreshNotification()
         }
-
-        createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -111,50 +105,39 @@ class DailyNotificationService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            intent?.action == ACTION_TTS -> {
+                handleTtsAction()
+            }
             intent?.action == ACTION_REFRESH_CONTENT -> {
-                // 每日刷新：确保前台服务运行 + 推进每日推送
                 try {
-                    startForeground(NOTIFICATION_ID, buildPlaceholderNotification())
-                    serviceScope.launch {
-                        try {
-                            val item = repository.getDailyPushItem()
-                            if (item != null) {
-                                currentItem = item
-                                showNotification(item)
-                            } else {
-                                updatePlaceholderText("请先导入知识文件")
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "加载通知内容失败", e)
-                        }
+                    val item = kotlinx.coroutines.runBlocking { repository.getDailyPushItem() }
+                    if (item != null) {
+                        currentItem = item
+                        currentNotificationItem = item
+                        val totalCount = kotlinx.coroutines.runBlocking { repository.getActiveFile()?.knowledgeCount ?: 0 }
+                        updateOrStartNotification(item, totalCount)
+                    } else {
+                        updateOrStartPlaceholder("请先导入知识文件")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "启动前台服务失败", e)
-                    stopSelf()
-                    return START_NOT_STICKY
+                    Log.e(TAG, "刷新通知失败", e)
+                    try { updateOrStartPlaceholder("加载失败") } catch (_: Exception) {}
                 }
             }
             else -> {
-                // 普通启动：显示当前知识
                 try {
-                    startForeground(NOTIFICATION_ID, buildPlaceholderNotification())
-                    serviceScope.launch {
-                        try {
-                            val item = repository.getCurrentPushItem()
-                            if (item != null) {
-                                currentItem = item
-                                showNotification(item)
-                            } else {
-                                updatePlaceholderText("请先导入知识文件")
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "加载通知内容失败", e)
-                        }
+                    val item = kotlinx.coroutines.runBlocking { repository.getCurrentPushItem() }
+                    if (item != null) {
+                        currentItem = item
+                        currentNotificationItem = item
+                        val totalCount = kotlinx.coroutines.runBlocking { repository.getActiveFile()?.knowledgeCount ?: 0 }
+                        updateOrStartNotification(item, totalCount)
+                    } else {
+                        updateOrStartPlaceholder("请先导入知识文件")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "启动前台服务失败", e)
-                    stopSelf()
-                    return START_NOT_STICKY
+                    try { updateOrStartPlaceholder("加载失败") } catch (_: Exception) {}
                 }
             }
         }
@@ -162,199 +145,137 @@ class DailyNotificationService : Service() {
         return START_STICKY
     }
 
-    /** 构建占位通知（满足 startForeground 必须立即调用的要求） */
-    private fun buildPlaceholderNotification(): Notification {
-        val openIntent = Intent(this, MainActivity::class.java)
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    /** 首次调用 startForeground()，后续调用 notify() 更新 */
+    private fun updateOrStartNotification(item: KnowledgeItem, totalCount: Int) {
+        val notification = buildNotification(item, totalCount)
+        if (hasStartedForeground) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(NOTIFICATION_ID, notification)
         } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
+            startForeground(NOTIFICATION_ID, notification)
+            hasStartedForeground = true
         }
+    }
+
+    /** 占位通知同样遵循首次 startForeground / 后续 notify */
+    private fun updateOrStartPlaceholder(text: String) {
+        val notification = buildPlaceholderNotification(text)
+        if (hasStartedForeground) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(NOTIFICATION_ID, notification)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+            hasStartedForeground = true
+        }
+    }
+
+    /** 构建占位通知 */
+    private fun buildPlaceholderNotification(text: String): Notification {
+        val openIntent = Intent(this, MainActivity::class.java)
+        val flags = pendingIntentFlags()
         val contentIntent = PendingIntent.getActivity(this, 0, openIntent, flags)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notification_title))
-            .setContentText("加载中…")
+            .setContentText(text)
             .setContentIntent(contentIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setDefaults(0)
+            .setSound(null)
+            .setVibrate(longArrayOf(0))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-    }
-
-    /** 更新占位通知的文字提示 */
-    private fun updatePlaceholderText(text: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(getString(R.string.notification_title))
-            .setContentText(text)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    this, 0,
-                    Intent(this, MainActivity::class.java),
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                    else PendingIntent.FLAG_UPDATE_CURRENT
-                )
-            )
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    /**
-     * 显示/更新通知
-     */
-    private suspend fun showNotification(item: KnowledgeItem) {
-        currentItem = item
-        currentNotificationItem = item  // 同步共享状态
-        val remoteViews = buildRemoteViews(item)
-        val isFavorite = repository.getItemById(item.id)?.isFavorite ?: false
-        updateFavoriteButton(remoteViews, isFavorite)
-        updateTtsButton(remoteViews)
-
-        val notification = buildNotification(remoteViews)
-        startForeground(NOTIFICATION_ID, notification)
-    }
-
-    /**
-     * 刷新通知（不改变内容，仅更新按钮状态）
-     * 使用共享的 currentNotificationItem，防止 Receiver 更新内容后被回退
-     */
+    /** 刷新通知（TTS/收藏状态变化时更新按钮文字） */
     private fun refreshNotification() {
         val item = currentNotificationItem ?: return
         serviceScope.launch {
+            val totalCount = repository.getActiveFile()?.knowledgeCount ?: 0
             synchronized(notificationUpdateLock) {
-                val remoteViews = buildRemoteViews(item)
-                val isFavorite = repository.getItemById(item.id)?.isFavorite ?: false
-                updateFavoriteButton(remoteViews, isFavorite)
-                updateTtsButton(remoteViews)
-
-                val notification = buildNotification(remoteViews)
+                val notification = buildNotification(item, totalCount)
                 val manager = getSystemService(NotificationManager::class.java)
                 manager.notify(NOTIFICATION_ID, notification)
             }
         }
     }
 
-    /**
-     * 更新通知内容为新条目
-     */
-    suspend fun updateContent(newItem: KnowledgeItem) {
-        currentItem = newItem
-        showNotification(newItem)
+    /** TTS 朗读/停止 — 点击直达 Service */
+    private fun handleTtsAction() {
+        val item = currentNotificationItem ?: return
+        val tts = ttsManager ?: return
+        tts.speakOrStop(item.content)
     }
 
-    /**
-     * 构建 RemoteViews
-     */
-    private suspend fun buildRemoteViews(item: KnowledgeItem): RemoteViews {
-        val remoteViews = RemoteViews(packageName, R.layout.notification_daily_knowledge)
-
-        // 设置知识内容
-        remoteViews.setTextViewText(R.id.tv_knowledge_content, item.content)
-
-        // 设置进度：第n条/共m条
-        val totalCount = repository.getActiveFile()?.knowledgeCount ?: 0
-        val progressText = "${item.indexInFile + 1}/$totalCount"
-        remoteViews.setTextViewText(R.id.tv_progress, progressText)
-
-        // 绑定按钮点击事件
-        setButtonClick(remoteViews, R.id.btn_prev, NotificationActionReceiver.ACTION_NAV_PREV)
-        setButtonClick(remoteViews, R.id.btn_next, NotificationActionReceiver.ACTION_NAV_NEXT)
-        setButtonClick(remoteViews, R.id.btn_read_aloud, NotificationActionReceiver.ACTION_TTS_TOGGLE)
-        setButtonClick(remoteViews, R.id.btn_favorite, NotificationActionReceiver.ACTION_FAVORITE_TOGGLE)
-        setButtonClick(remoteViews, R.id.btn_share, NotificationActionReceiver.ACTION_SHARE)
-
-        return remoteViews
+    /** 构建 TTS 按钮的 PendingIntent（getService 直达 Service，比 getBroadcast 更快） */
+    private fun buildTtsServiceIntent(): PendingIntent {
+        val intent = Intent(this, DailyNotificationService::class.java).apply {
+            action = ACTION_TTS
+        }
+        return PendingIntent.getService(this, ACTION_TTS.hashCode(), intent, pendingIntentFlags())
     }
 
-    /**
-     * 绑定按钮 PendingIntent（发送广播到 NotificationActionReceiver）
-     */
-    private fun setButtonClick(remoteViews: RemoteViews, viewId: Int, action: String) {
+    /** 构建标准广播 Action 按钮的 PendingIntent */
+    private fun buildActionIntent(action: String): PendingIntent {
         val intent = Intent(this, NotificationActionReceiver::class.java).apply {
             this.action = action
         }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        return PendingIntent.getBroadcast(this, action.hashCode(), intent, pendingIntentFlags())
+    }
+
+    private fun pendingIntentFlags(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val pendingIntent = PendingIntent.getBroadcast(this, action.hashCode(), intent, flags)
-        remoteViews.setOnClickPendingIntent(viewId, pendingIntent)
-    }
 
-    /**
-     * 更新收藏按钮文字
-     */
-    private fun updateFavoriteButton(remoteViews: RemoteViews, isFavorite: Boolean) {
-        val text = if (isFavorite) "★ 已收藏" else "☆ 收藏"
-        remoteViews.setTextViewText(R.id.btn_favorite, text)
-    }
+    /** 构建 RemoteViews 通知 — 音乐播放器风格：静音、不震动、固定ID、仅刷新 */
+    private fun buildNotification(item: KnowledgeItem, totalCount: Int): Notification {
+        val openIntent = Intent(this, MainActivity::class.java)
+        val contentIntent = PendingIntent.getActivity(this, 0, openIntent, pendingIntentFlags())
 
-    /**
-     * 更新朗读按钮文字
-     */
-    private fun updateTtsButton(remoteViews: RemoteViews) {
-        val text = when {
+        val favLabel = if (item.isFavorite) "★ 已收藏" else "☆ 收藏"
+        val ttsLabel = when {
             !isTtsReady -> "🔇 朗读"
             ttsManager?.isSpeaking() == true -> "⏹ 停止"
             else -> "🔊 朗读"
         }
-        remoteViews.setTextViewText(R.id.btn_read_aloud, text)
-    }
+        val progressText = "第${item.indexInFile + 1}条/共${totalCount}条"
 
-    /**
-     * 构建 Notification 对象
-     */
-    private fun buildNotification(remoteViews: RemoteViews): Notification {
-        // 点击通知打开主界面
-        val openIntent = Intent(this, MainActivity::class.java)
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        val contentIntent = PendingIntent.getActivity(this, 0, openIntent, flags)
+        // 折叠和展开都用完整布局，确保按钮始终可见
+        val contentView = RemoteViews(packageName, R.layout.notification_daily_knowledge_expanded)
+        contentView.setTextViewText(R.id.tv_knowledge_content, item.content)
+        contentView.setTextViewText(R.id.tv_progress, progressText)
+        contentView.setTextViewText(R.id.btn_prev, "◀ 上一条")
+        contentView.setTextViewText(R.id.btn_next, "下一条 ▶")
+        contentView.setTextViewText(R.id.btn_read_aloud, ttsLabel)
+        contentView.setTextViewText(R.id.btn_favorite, favLabel)
+        contentView.setTextViewText(R.id.btn_share, "📤 分享")
+
+        // 按钮点击事件 — TTS 用 getService 直达 Service
+        contentView.setOnClickPendingIntent(R.id.btn_prev, buildActionIntent(NotificationActionReceiver.ACTION_NAV_PREV))
+        contentView.setOnClickPendingIntent(R.id.btn_next, buildActionIntent(NotificationActionReceiver.ACTION_NAV_NEXT))
+        contentView.setOnClickPendingIntent(R.id.btn_read_aloud, buildTtsServiceIntent())
+        contentView.setOnClickPendingIntent(R.id.btn_favorite, buildActionIntent(NotificationActionReceiver.ACTION_FAVORITE_TOGGLE))
+        contentView.setOnClickPendingIntent(R.id.btn_share, buildActionIntent(NotificationActionReceiver.ACTION_SHARE))
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(remoteViews)
-            .setCustomBigContentView(remoteViews)
+            .setCustomContentView(contentView)
+            .setCustomBigContentView(contentView)
             .setContentIntent(contentIntent)
-            .setOngoing(true)           // 不可滑动删除
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setDefaults(0)
+            .setSound(null)
+            .setVibrate(longArrayOf(0))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
-    }
-
-    /**
-     * 创建通知渠道
-     */
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = getString(R.string.notification_channel_desc)
-                setShowBadge(false)
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
-    }
-
-    override fun onDestroy() {
-        serviceScope.cancel()
-        // 不在这里释放 TTS，因为 NotificationActionReceiver 可能还需要用
-        super.onDestroy()
     }
 }

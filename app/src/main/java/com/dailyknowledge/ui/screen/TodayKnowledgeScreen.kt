@@ -8,21 +8,26 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.dailyknowledge.data.model.KnowledgeItem
 import com.dailyknowledge.ui.viewmodel.TodayViewModel
+import com.dailyknowledge.DailyKnowledgeApp
 import com.dailyknowledge.util.PreferencesManager
+import com.dailyknowledge.util.TtsManager
 import com.dailyknowledge.worker.DailyNotificationWorker
 import java.text.SimpleDateFormat
 import java.util.*
@@ -34,17 +39,34 @@ import java.util.*
 @Composable
 fun TodayKnowledgeScreen(
     viewModel: TodayViewModel,
+    navController: NavController,
     onNavigateToImport: () -> Unit
 ) {
     val currentItem by viewModel.currentItem.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val hasActiveSource by viewModel.hasActiveSource.collectAsState()
+    val totalCount by viewModel.totalCount.collectAsState()
+    val currentIndex by viewModel.currentIndex.collectAsState()
     val context = LocalContext.current
 
     // 收集一次性事件（Toast）
     LaunchedEffect(Unit) {
         viewModel.toastEvent.collect { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 每次页面可见时刷新数据（使用生命周期确保 restoreState 也能触发）
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.loadCurrentKnowledge()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -125,6 +147,8 @@ fun TodayKnowledgeScreen(
                 val item = currentItem!!
                 KnowledgeDetailView(
                     item = item,
+                    totalCount = totalCount,
+                    currentIndex = currentIndex,
                     paddingValues = paddingValues,
                     onPrev = { viewModel.moveToPrev() },
                     onNext = { viewModel.moveToNext() },
@@ -140,12 +164,59 @@ fun TodayKnowledgeScreen(
 @Composable
 private fun KnowledgeDetailView(
     item: KnowledgeItem,
+    totalCount: Int,
+    currentIndex: Int,
     paddingValues: PaddingValues,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onToggleFavorite: () -> Unit,
     onShare: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    // 使用 App 全局单例 TTS（启动时就已创建，避免重复初始化）
+    val ttsManager = remember { DailyKnowledgeApp.getInstance().ttsManager }
+    var isSpeaking by remember { mutableStateOf(false) }
+    var isTtsReady by remember { mutableStateOf(false) }
+
+    // 监听 TTS 状态和就绪状态，避免覆盖 Service 已有的回调
+    DisposableEffect(ttsManager) {
+        val tts = ttsManager
+        if (tts != null) {
+            // 先读取当前状态
+            isTtsReady = tts.isReady()
+            isSpeaking = tts.isSpeaking()
+            tts.setOnStatusChanged { speaking ->
+                isSpeaking = speaking
+            }
+            tts.setOnTtsReady { ready ->
+                isTtsReady = ready
+            }
+        }
+        onDispose {
+            // 不清除回调，因为 App 单例需要持续使用
+        }
+    }
+
+    // TTS 朗读处理
+    fun handleTtsToggle() {
+        val tts = ttsManager
+        when {
+            tts == null -> {
+                Toast.makeText(context, "朗读引擎不可用", Toast.LENGTH_SHORT).show()
+            }
+            !isTtsReady -> {
+                Toast.makeText(context, "朗读引擎正在初始化，请稍后再试", Toast.LENGTH_SHORT).show()
+            }
+            else -> {
+                val ok = tts.speakOrStop(item.content)
+                if (!ok) {
+                    Toast.makeText(context, "朗读失败，请检查系统 TTS 设置", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -154,6 +225,18 @@ private fun KnowledgeDetailView(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // ===== 第一排：小知识 =====
+        Text(
+            text = "小知识",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        )
+
         // 知识内容卡片
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -195,31 +278,51 @@ private fun KnowledgeDetailView(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 操作按钮行 1：上一页 / 下一页
+        // ===== 第二排：上一条 / 第n条/共m条 / 下一条 =====
         Row(
             modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             FilledTonalButton(onClick = onPrev) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "上一页")
+                Icon(Icons.Default.ChevronLeft, contentDescription = "上一条")
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("上一页")
+                Text("上一条")
             }
 
+            // 第 n 条 / 共 m 条
+            Text(
+                text = "第${currentIndex + 1}条/共${totalCount}条",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+
             FilledTonalButton(onClick = onNext) {
-                Text("下一页")
+                Text("下一条")
                 Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.ChevronRight, contentDescription = "下一页")
+                Icon(Icons.Default.ChevronRight, contentDescription = "下一条")
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 操作按钮行 2：收藏 / 分享
+        // ===== 第三排：朗读 / 收藏 / 分享 =====
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
+            // 朗读按钮
+            FilledTonalButton(onClick = { handleTtsToggle() }) {
+                val speakIcon = if (isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp
+                val speakLabel = if (isSpeaking) "停止" else "朗读"
+                Icon(speakIcon, contentDescription = speakLabel)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(speakLabel)
+            }
+
+            // 收藏按钮
             val favIcon = if (item.isFavorite) Icons.Default.Star else Icons.Default.StarBorder
             val favLabel = if (item.isFavorite) "已收藏" else "收藏"
             FilledTonalButton(onClick = onToggleFavorite) {
@@ -228,6 +331,7 @@ private fun KnowledgeDetailView(
                 Text(favLabel)
             }
 
+            // 分享按钮
             FilledTonalButton(onClick = onShare) {
                 Icon(Icons.Default.Share, contentDescription = "分享")
                 Spacer(modifier = Modifier.width(4.dp))

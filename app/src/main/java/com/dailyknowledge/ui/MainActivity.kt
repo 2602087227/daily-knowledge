@@ -116,7 +116,11 @@ class MainActivity : ComponentActivity() {
      * 启动前台通知服务
      */
     private fun startNotificationService() {
-        DailyNotificationService.start(this)
+        try {
+            DailyNotificationService.start(this)
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "启动通知服务失败", e)
+        }
     }
 
     @Deprecated("Deprecated in Java")

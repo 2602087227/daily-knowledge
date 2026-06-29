@@ -12,9 +12,9 @@ id btn_share
 id ll_buttons_row1
 id ll_buttons_row2
 id tv_knowledge_content
-id tv_notification_title
 id tv_progress
 layout notification_daily_knowledge
+layout notification_daily_knowledge_expanded
 mipmap ic_launcher
 string app_name
 string btn_activate

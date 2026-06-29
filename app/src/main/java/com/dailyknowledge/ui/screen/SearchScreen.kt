@@ -1,18 +1,21 @@
 package com.dailyknowledge.ui.screen
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dailyknowledge.DailyKnowledgeApp
 import com.dailyknowledge.data.model.KnowledgeItem
 import com.dailyknowledge.ui.theme.FavoriteActive
 import com.dailyknowledge.ui.theme.FavoriteInactive
@@ -28,6 +31,40 @@ fun SearchScreen(viewModel: SearchViewModel) {
     val searchResults by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val hasSearched by viewModel.hasSearched.collectAsState()
+    val context = LocalContext.current
+
+    // 使用 App 全局单例 TTS
+    val ttsManager = remember { DailyKnowledgeApp.getInstance().ttsManager }
+    var isSpeaking by remember { mutableStateOf(false) }
+    var isTtsReady by remember { mutableStateOf(false) }
+
+    // 监听 TTS 状态
+    DisposableEffect(ttsManager) {
+        val tts = ttsManager
+        if (tts != null) {
+            isTtsReady = tts.isReady()
+            isSpeaking = tts.isSpeaking()
+            tts.setOnStatusChanged { speaking -> isSpeaking = speaking }
+            tts.setOnTtsReady { ready -> isTtsReady = ready }
+        }
+        onDispose { /* 不清除回调，App 单例需要持续使用 */ }
+    }
+
+    /** TTS 朗读/停止 */
+    fun handleTtsToggle(content: String) {
+        val tts = ttsManager
+        when {
+            tts == null ->
+                Toast.makeText(context, "朗读引擎不可用", Toast.LENGTH_SHORT).show()
+            !isTtsReady ->
+                Toast.makeText(context, "朗读引擎正在初始化，请稍后再试", Toast.LENGTH_SHORT).show()
+            else -> {
+                val ok = tts.speakOrStop(content)
+                if (!ok)
+                    Toast.makeText(context, "朗读失败，请检查系统 TTS 设置", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -130,6 +167,8 @@ fun SearchScreen(viewModel: SearchViewModel) {
                         items(searchResults, key = { it.id }) { item ->
                             SearchResultCard(
                                 item = item,
+                                isSpeaking = isSpeaking,
+                                onTtsToggle = { handleTtsToggle(item.content) },
                                 onToggleFavorite = { viewModel.toggleFavorite(item.id) },
                                 onShare = { viewModel.shareKnowledge(item.content) }
                             )
@@ -167,6 +206,8 @@ fun SearchScreen(viewModel: SearchViewModel) {
 @Composable
 private fun SearchResultCard(
     item: KnowledgeItem,
+    isSpeaking: Boolean,
+    onTtsToggle: () -> Unit,
     onToggleFavorite: () -> Unit,
     onShare: () -> Unit
 ) {
@@ -192,6 +233,15 @@ private fun SearchResultCard(
                 horizontalArrangement = Arrangement.End,
                 modifier = Modifier.fillMaxWidth()
             ) {
+                // 朗读按钮
+                IconButton(onClick = onTtsToggle, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        if (isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                        contentDescription = if (isSpeaking) "停止" else "朗读",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 IconButton(onClick = onToggleFavorite, modifier = Modifier.size(36.dp)) {
                     Icon(
                         if (item.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,

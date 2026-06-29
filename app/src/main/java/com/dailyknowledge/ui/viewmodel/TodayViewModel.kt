@@ -37,6 +37,14 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     private val _hasActiveSource = MutableStateFlow(false)
     val hasActiveSource: StateFlow<Boolean> = _hasActiveSource.asStateFlow()
 
+    /** 当前激活文件的总条数 */
+    private val _totalCount = MutableStateFlow(0)
+    val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
+
+    /** 当前推送索引（0-based） */
+    private val _currentIndex = MutableStateFlow(0)
+    val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
+
     /** Toast 提示（一次性事件） */
     private val _toastEvent = MutableSharedFlow<String>(
         replay = 0,
@@ -64,6 +72,10 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
                     repository.getActiveFile()
                 }
                 _hasActiveSource.value = activeFile != null
+                _totalCount.value = activeFile?.knowledgeCount ?: 0
+                _currentIndex.value = withContext(Dispatchers.IO) {
+                    repository.getCurrentPushIndex()
+                }
             } catch (e: CancellationException) {
                 // 被取消，忽略
             } catch (e: Exception) {
@@ -83,6 +95,9 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
                     repository.moveToPrevItem()
                 }
                 _currentItem.value = item
+                _currentIndex.value = withContext(Dispatchers.IO) {
+                    repository.getCurrentPushIndex()
+                }
             } catch (e: CancellationException) {
                 // ignored
             } catch (e: Exception) {
@@ -100,6 +115,9 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
                     repository.moveToNextItem()
                 }
                 _currentItem.value = item
+                _currentIndex.value = withContext(Dispatchers.IO) {
+                    repository.getCurrentPushIndex()
+                }
             } catch (e: CancellationException) {
                 // ignored
             } catch (e: Exception) {

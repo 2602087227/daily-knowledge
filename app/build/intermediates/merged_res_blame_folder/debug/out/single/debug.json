@@ -1,30 +1,38 @@
 [
     {
-        "merged": "com.dailyknowledge.app-merged_res-62:/drawable_ic_launcher_background.xml.flat",
-        "source": "com.dailyknowledge.app-main-64:/drawable/ic_launcher_background.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\drawable\\ic_launcher_foreground.xml"
     },
     {
-        "merged": "com.dailyknowledge.app-merged_res-62:/drawable_ic_launcher_foreground.xml.flat",
-        "source": "com.dailyknowledge.app-main-64:/drawable/ic_launcher_foreground.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\drawable_ic_notification.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\drawable\\ic_notification.xml"
     },
     {
-        "merged": "com.dailyknowledge.app-merged_res-62:/mipmap-anydpi-v26_ic_launcher.xml.flat",
-        "source": "com.dailyknowledge.app-main-64:/mipmap-anydpi-v26/ic_launcher.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\layout_notification_daily_knowledge_expanded.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\layout\\notification_daily_knowledge_expanded.xml"
     },
     {
-        "merged": "com.dailyknowledge.app-merged_res-62:/drawable_btn_notification_bg.xml.flat",
-        "source": "com.dailyknowledge.app-main-64:/drawable/btn_notification_bg.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\xml_backup_rules.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\xml\\backup_rules.xml"
     },
     {
-        "merged": "com.dailyknowledge.app-merged_res-62:/drawable_ic_notification.xml.flat",
-        "source": "com.dailyknowledge.app-main-64:/drawable/ic_notification.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\drawable_ic_launcher_background.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\drawable\\ic_launcher_background.xml"
     },
     {
-        "merged": "com.dailyknowledge.app-merged_res-62:/xml_backup_rules.xml.flat",
-        "source": "com.dailyknowledge.app-main-64:/xml/backup_rules.xml"
+        "merged": "com.dailyknowledge.app-merged_res-60:/layout_notification_daily_knowledge_expanded.xml.flat",
+        "source": "com.dailyknowledge.app-main-62:/layout/notification_daily_knowledge_expanded.xml"
     },
     {
-        "merged": "com.dailyknowledge.app-merged_res-62:/layout_notification_daily_knowledge.xml.flat",
-        "source": "com.dailyknowledge.app-main-64:/layout/notification_daily_knowledge.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\mipmap-anydpi-v26\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\layout_notification_daily_knowledge.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\layout\\notification_daily_knowledge.xml"
+    },
+    {
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-merged_res-60:\\drawable_btn_notification_bg.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.5\\com.dailyknowledge.app-main-62:\\drawable\\btn_notification_bg.xml"
     }
 ]

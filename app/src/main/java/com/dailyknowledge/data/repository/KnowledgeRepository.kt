@@ -90,8 +90,9 @@ class KnowledgeRepository(private val context: Context) {
         fileDao.deactivateAll()
         fileDao.activateFile(fileId)
 
-        // 6. 重置推送索引
+        // 6. 重置推送索引并标记今天已推送，防止 getDailyPushItem 再次前进
         prefs.resetPushIndex()
+        prefs.setLastPushDate(SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(Date()))
         prefs.setActiveFileId(fileId)
 
         return knowledgeFile.copy(id = fileId, isActive = true)
@@ -196,6 +197,9 @@ class KnowledgeRepository(private val context: Context) {
     /** 获取指定文件的知识条目 */
     fun getItemsByFile(fileId: Long): Flow<List<KnowledgeItem>> =
         itemDao.getItemsByFile(fileId)
+
+    /** 获取当前推送索引 */
+    suspend fun getCurrentPushIndex(): Int = prefs.getCurrentPushIndex()
 
     /** 获取当前推送的知识条目 */
     suspend fun getCurrentPushItem(): KnowledgeItem? {

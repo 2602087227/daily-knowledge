@@ -42,16 +42,22 @@ class DailyKnowledgeApp : Application(), Configuration.Provider {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = getString(R.string.notification_channel_desc)
-                setShowBadge(false)
-            }
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            // 仅在渠道不存在时创建，避免重置用户设置
+            val existing = manager.getNotificationChannel(CHANNEL_ID)
+            if (existing == null) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    getString(R.string.notification_channel_name),
+                    NotificationManager.IMPORTANCE_LOW     // 音乐播放器级：无声音、无振动、无 Heads-up
+                ).apply {
+                    description = getString(R.string.notification_channel_desc)
+                    setShowBadge(false)
+                    setSound(null, null)
+                    enableVibration(false)
+                }
+                manager.createNotificationChannel(channel)
+            }
         }
     }
 

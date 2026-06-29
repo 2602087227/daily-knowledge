@@ -88,6 +88,7 @@ fun AppNavigation() {
             composable(BottomNavItem.Today.route) {
                 TodayKnowledgeScreen(
                     viewModel = todayViewModel,
+                    navController = navController,
                     onNavigateToImport = {
                         // 切换到知识库 Tab 并触发导入
                         navController.navigate(BottomNavItem.Library.route) {

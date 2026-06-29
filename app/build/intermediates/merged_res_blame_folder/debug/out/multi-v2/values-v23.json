@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.dailyknowledge.app-mergeDebugResources-60:/values-v23/values-v23.xml",
+            "outputFile": "com.dailyknowledge.app-mergeDebugResources-58:/values-v23/values-v23.xml",
             "map": [
                 {
                     "source": "C:\\Users\\admin\\.gradle\\caches\\transforms-3\\9ae9e5368319b79e8d74ae7f44c21683\\transformed\\work-runtime-2.9.0\\res\\values-v23\\values-v23.xml",

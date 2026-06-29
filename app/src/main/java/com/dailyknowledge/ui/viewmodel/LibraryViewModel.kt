@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.dailyknowledge.data.model.KnowledgeFile
 import com.dailyknowledge.data.model.KnowledgeItem
 import com.dailyknowledge.data.repository.KnowledgeRepository
+import com.dailyknowledge.service.DailyNotificationService
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -76,6 +77,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 _toastMessage.emit("导入成功：${fileName}（${file.knowledgeCount}条知识）")
                 // 自动选中新导入的文件
                 selectFile(file.id)
+                // 刷新通知栏，使其立即显示新导入知识源的内容
+                DailyNotificationService.triggerDailyRefresh(getApplication())
             } catch (e: Exception) {
                 _importState.value = ImportState.Error(e.message ?: "导入失败")
                 _toastMessage.emit("导入失败：${e.message}")
@@ -89,6 +92,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 repository.setActiveFile(fileId)
                 _toastMessage.emit("已设为当前知识源")
+                // 刷新通知栏，使其立即显示新知识源的内容
+                DailyNotificationService.triggerDailyRefresh(getApplication())
             } catch (e: Exception) {
                 _toastMessage.emit("设置失败：${e.message}")
             }

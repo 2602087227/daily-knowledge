@@ -1,129 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 通知栏折叠视图 — 显示加粗内容 + 进度 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="12dp"
+    android:orientation="horizontal"
+    android:padding="10dp"
+    android:gravity="center_vertical"
     android:background="@android:color/white">
 
-    <!-- 标题行 -->
-    <TextView
-        android:id="@+id/tv_notification_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="每日小知识"
-        android:textColor="@android:color/black"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:paddingBottom="8dp" />
-
-    <!-- 知识内容文本 -->
     <TextView
         android:id="@+id/tv_knowledge_content"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_weight="1"
         android:textColor="#333333"
-        android:textSize="15sp"
-        android:lineSpacingExtra="3dp"
+        android:textSize="13sp"
+        android:textStyle="bold"
         android:maxLines="1"
-        android:ellipsize="end"
-        android:paddingBottom="10dp" />
+        android:ellipsize="end" />
 
-    <!-- 按钮行1：上一页 | 第n条/共m条 | 下一条 -->
-    <LinearLayout
-        android:id="@+id/ll_buttons_row1"
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/tv_progress"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <TextView
-            android:id="@+id/btn_prev"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="◀ 上一页"
-            android:textColor="#1976D2"
-            android:textSize="13sp"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/btn_notification_bg" />
-
-        <TextView
-            android:id="@+id/tv_progress"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:gravity="center"
-            android:text="1/100"
-            android:textColor="#666666"
-            android:textSize="12sp"
-            android:paddingLeft="8dp"
-            android:paddingRight="8dp" />
-
-        <TextView
-            android:id="@+id/btn_next"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="下一页 ▶"
-            android:textColor="#1976D2"
-            android:textSize="13sp"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/btn_notification_bg" />
-
-    </LinearLayout>
-
-    <!-- 按钮行2：朗读 | 收藏 | 分享 -->
-    <LinearLayout
-        android:id="@+id/ll_buttons_row2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="2dp">
-
-        <TextView
-            android:id="@+id/btn_read_aloud"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="🔊 朗读"
-            android:textColor="#1976D2"
-            android:textSize="13sp"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/btn_notification_bg" />
-
-        <TextView
-            android:id="@+id/btn_favorite"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="☆ 收藏"
-            android:textColor="#1976D2"
-            android:textSize="13sp"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/btn_notification_bg" />
-
-        <TextView
-            android:id="@+id/btn_share"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="📤 分享"
-            android:textColor="#1976D2"
-            android:textSize="13sp"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/btn_notification_bg" />
-
-    </LinearLayout>
+        android:textColor="#888888"
+        android:textSize="11sp"
+        android:paddingLeft="8dp"
+        android:text="第1条/共100条" />
 
 </LinearLayout>
