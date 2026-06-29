@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:      # 允许手动触发
 
+env:
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
 jobs:
   build:
     name: 编译 Debug APK
@@ -20,16 +23,17 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
-      - name: 设置 Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-34 build-tools;34.0.0'
-
       - name: 安装 Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.5"
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: 配置 Android SDK 并接受许可
+        run: |
+          echo "sdk.dir=${ANDROID_SDK_ROOT}" > local.properties
+          yes | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --licenses
+          ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
       - name: 编译 Debug APK
         run: chmod +x gradlew && ./gradlew assembleDebug
